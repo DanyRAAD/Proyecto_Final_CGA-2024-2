@@ -69,11 +69,15 @@ Sphere esfera1(10, 10);
 Box boxCollider;
 Sphere sphereCollider(10, 10);
 // Models complex instances
+//Nave
+Model modelNave;
 
 // Lamps
 Model modelLamp1;
 Model modelLamp2;
 Model modelLampPost2;
+
+
 // Modelos animados
 // Mayow
 Model mayowModelAnimate;
@@ -106,6 +110,7 @@ int lastMousePosY, offsetY = 0;
 // Model matrix definitions
 
 glm::mat4 modelMatrixMayow = glm::mat4(1.0f);
+glm::mat4 modelMatrixNave = glm::mat4(1.0f);
 
 
 
@@ -255,9 +260,13 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	esfera1.init();
 	esfera1.setShader(&shaderMulLighting);
 
+	//Nave
+	modelNave.loadModel("../models/Nave/nave.obj");
+	modelNave.setShader(&shaderMulLighting);
+
 
 	//Lamps models
-	modelLamp1.loadModel("../models/Street-Lamp-Black/objLamp.obj");
+	modelLamp1.loadModel("../models/Pila/pila.obj");
 	modelLamp1.setShader(&shaderMulLighting);
 	modelLamp2.loadModel("../models/Street_Light/Lamp.obj");
 	modelLamp2.setShader(&shaderMulLighting);
@@ -541,6 +550,7 @@ void destroy() {
 	modelLamp2.destroy();
 	modelLampPost2.destroy();
 	mayowModelAnimate.destroy();
+	modelNave.destroy();
 
 
 	// Terrains objects Delete
@@ -728,7 +738,7 @@ void applicationLoop() {
 
 	modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(13.0f, 0.05f, -5.0f));
 	modelMatrixMayow = glm::rotate(modelMatrixMayow, glm::radians(-90.0f), glm::vec3(0, 1, 0));
-
+	modelMatrixNave = glm::translate(modelMatrixNave, glm::vec3(10.0, 2.0, -20.5));
 
 
 	// Variables to interpolation key frames
@@ -746,6 +756,7 @@ void applicationLoop() {
 		psi = processInput(true);
 
 		std::map<std::string, bool> collisionDetection;
+		std::map<std::string, bool> collisionDetector;
 
 		// Variables donde se guardan las matrices de cada articulacion por 1 frame
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -884,6 +895,11 @@ void applicationLoop() {
 		/*******************************************
 		 * Custom objects obj
 		 *******************************************/
+		//Nave Render
+		modelMatrixNave[3][1] = terrain.getHeightTerrain(modelMatrixNave[3][0], modelMatrixNave[3][2] + 2.0 );
+		modelNave.render(modelMatrixNave);
+
+
 		// Forze to enable the unit texture to 0 always ----------------- IMPORTANT
 		glActiveTexture(GL_TEXTURE0);
 
@@ -927,9 +943,9 @@ void applicationLoop() {
 			modelMatrixMayow[3][1] = terrain.getHeightTerrain(modelMatrixMayow[3][0], modelMatrixMayow[3][2]);
 		}
 		glm::mat4 modelMatrixMayowBody = glm::mat4(modelMatrixMayow);
-		modelMatrixMayowBody = glm::scale(modelMatrixMayowBody, glm::vec3(0.007f));
+		modelMatrixMayowBody = glm::scale(modelMatrixMayowBody, glm::vec3(0.015f));
 		mayowModelAnimate.setAnimationIndex(animationMayowIndex);
-		mayowModelAnimate.render(modelMatrixMayowBody);
+		mayowModelAnimate.render(modelMatrixMayowBody);	
 		animationMayowIndex = 1;
 
 		/*******************************************
@@ -952,6 +968,20 @@ void applicationLoop() {
 		 * Creacion de colliders
 		 * IMPORTANT do this before interpolations
 		 *******************************************/
+		//nave
+		// Nave collider
+		AbstractModel::OBB naveCollider;
+		glm::mat4 modelMatrixColliderNave = glm::mat4(1.0);
+		modelMatrixColliderNave = modelMatrixNave;  // Assuming modelMatrixNave is already defined and contains the correct transformation matrix for the nave
+		addOrUpdateColliders(collidersOBB, "nave", naveCollider, modelMatrixColliderNave);
+
+		// Set the orientation of collider before doing the scale
+		naveCollider.u = glm::quat_cast(modelMatrixColliderNave);
+		modelMatrixColliderNave = glm::scale(modelMatrixColliderNave, glm::vec3(1.0, 1.0, 1.0));  // Adjust scaling as necessary
+		modelMatrixColliderNave = glm::translate(modelMatrixColliderNave, modelNave.getObb().c);
+		naveCollider.c = glm::vec3(modelMatrixColliderNave[3]);
+		naveCollider.e = modelNave.getObb().e * glm::vec3(1.0, 1.0, 1.0);  // Adjust scaling as necessary
+		std::get<0>(collidersOBB.find("nave")->second) = naveCollider;
 
 
 	// Lamps1 colliders
@@ -990,20 +1020,102 @@ void applicationLoop() {
 
 		// Collider de mayow
 		AbstractModel::OBB mayowCollider;
-		glm::mat4 modelmatrixColliderMayow = glm::mat4(modelMatrixMayow);
-		modelmatrixColliderMayow = glm::rotate(modelmatrixColliderMayow,
-				glm::radians(-90.0f), glm::vec3(1, 0, 0));
-		// Set the orientation of collider before doing the scale
-		mayowCollider.u = glm::quat_cast(modelmatrixColliderMayow);
-		modelmatrixColliderMayow = glm::scale(modelmatrixColliderMayow, glm::vec3(0.021, 0.021, 0.021));
-		modelmatrixColliderMayow = glm::translate(modelmatrixColliderMayow,
-				glm::vec3(mayowModelAnimate.getObb().c.x,
-						mayowModelAnimate.getObb().c.y,
-						mayowModelAnimate.getObb().c.z));
-		mayowCollider.e = mayowModelAnimate.getObb().e * glm::vec3(0.021, 0.021, 0.021) * glm::vec3(0.787401574, 0.787401574, 0.787401574);
-		mayowCollider.c = glm::vec3(modelmatrixColliderMayow[3]);
+		glm::mat4 modelMatrixColliderMayow = glm::mat4(1.0);  // Iniciar con una matriz identidad
+
+		// Aplicar las transformaciones en el orden correcto
+		modelMatrixColliderMayow = glm::translate(modelMatrixColliderMayow, glm::vec3(modelMatrixMayow[3]));  // Trasladar al centro del modelo
+		modelMatrixColliderMayow = glm::rotate(modelMatrixColliderMayow, glm::radians(-90.0f), glm::vec3(1, 0, 0));  // Aplicar la rotación necesaria
+		modelMatrixColliderMayow = glm::scale(modelMatrixColliderMayow, glm::vec3(0.9f));  // Ajustar la escala global
+
+		// Obtener el centro y las dimensiones del OBB del modelo
+		glm::vec3 obbCenter = mayowModelAnimate.getObb().c;
+		glm::vec3 obbExtents = mayowModelAnimate.getObb().e;
+
+		// Ajustar la traslación adicional para centrar el OBB
+		modelMatrixColliderMayow = glm::translate(modelMatrixColliderMayow, obbCenter);
+
+		// Establecer la orientación del colisionador
+		mayowCollider.u = glm::quat_cast(modelMatrixColliderMayow);
+
+		// Ajustar las dimensiones del colisionador
+		mayowCollider.e = obbExtents * 0.9f * 0.7f;  // Ajustar con la escala global y factor adicional para brazos abiertos
+		mayowCollider.c = glm::vec3(modelMatrixColliderMayow * glm::vec4(0, 0, 0, 1));  // Centro del colisionador
+
+		// Aplicar un desplazamiento manual para ajustar la posición del colisionador
+		glm::vec3 manualOffset = glm::vec3(-0.5f, -0.1f, 0.4f);  // Ajusta estos valores según sea necesario
+		mayowCollider.c += manualOffset;
+
+		// Agregar o actualizar el colisionador en el mapa
 		addOrUpdateColliders(collidersOBB, "mayow", mayowCollider, modelMatrixMayow);
 
+		std::map<std::string, std::tuple<AbstractModel::OBB,glm::mat4,glm::mat4>>::iterator itObb1;
+		std::map<std::string, std::tuple<AbstractModel::OBB,glm::mat4,glm::mat4>>::iterator itObb2;
+		std::map<std::string, std::tuple<AbstractModel::SBB,glm::mat4,glm::mat4>>::iterator itSBB1;
+		std::map<std::string, std::tuple<AbstractModel::SBB,glm::mat4,glm::mat4>>::iterator itSBB2;
+		for(itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++){
+			bool isColision = false;
+			for(itObb2 = collidersOBB.begin(); itObb2 != collidersOBB.end() && !isColision; itObb2++){
+				if(itObb1 != itObb2 
+					&& testOBBOBB(std::get<0>(itObb1->second), std::get<0>(itObb2->second))){
+					std::cout << "Hay colision entre " << itObb1->first << " y el modelo" << 
+						itObb2->first << std::endl;
+					isColision = true;
+				}
+			}
+			addOrUpdateCollisionDetection(collisionDetector, itObb1->first, isColision);
+		}
+
+		for(itSBB1 = collidersSBB.begin(); itSBB1 != collidersSBB.end(); itSBB1++){
+			bool isColision = false;
+			for(itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++){
+				if(testSphereOBox(std::get<0>(itSBB1->second), std::get<0>(itObb1->second))){
+					std::cout << "Hay colision entre " << itSBB1->first << " y el objeto " << 
+						itObb1->first << std::endl;
+					isColision = true;
+					addOrUpdateCollisionDetection(collisionDetector, itObb1->first, true);	
+				}
+			}
+			addOrUpdateCollisionDetection(collisionDetector, itSBB1->first, isColision);
+		}
+
+		for(itSBB1 = collidersSBB.begin(); itSBB1 != collidersSBB.end(); itSBB1++){
+			bool isColision = false;
+			for(itSBB2 = collidersSBB.begin(); itSBB2 != collidersSBB.end() && !isColision; itSBB2++){
+				if(itSBB1 != itSBB2 && testSphereSphereIntersection(
+					std::get<0>(itSBB1->second), std::get<0>(itSBB2->second)
+				)){
+					std::cout << "Hay colision entre " << itSBB1->first << " y el objeto " << 
+						itSBB2->first << std::endl;
+					isColision = true;
+				}
+			}
+			addOrUpdateCollisionDetection(collisionDetector, itSBB1->first, isColision);
+		}
+
+		std::map<std::string, bool>::iterator itCollision;
+		for(itCollision = collisionDetector.begin(); itCollision != collisionDetector.end();
+			itCollision++){
+			std::map<std::string, std::tuple<AbstractModel::OBB, 
+				glm::mat4, glm::mat4>>::iterator itOBBuscado = collidersOBB.find(
+					itCollision->first);
+			std::map<std::string, std::tuple<AbstractModel::SBB, 
+				glm::mat4, glm::mat4>>::iterator itSBBBuscado = collidersSBB.find(
+					itCollision->first);
+			if(itOBBuscado != collidersOBB.end()){
+				if(!itCollision->second)
+					addOrUpdateColliders(collidersOBB, itCollision->first);
+				else{
+					if(itCollision->first.compare("mayow") == 0)
+						modelMatrixMayow = std::get<1>(itOBBuscado->second);
+					if(itCollision->first.compare("nave") == 0)
+						modelMatrixNave = std::get<1>(itOBBuscado->second);
+				}
+			}
+			if(itSBBBuscado != collidersSBB.end()){
+				if(!itCollision->second)
+					addOrUpdateColliders(collidersSBB, itCollision->first);
+			}
+		}
 		/*******************************************
 		 * Render de colliders
 		 *******************************************/
@@ -1080,7 +1192,7 @@ void applicationLoop() {
 			addOrUpdateCollisionDetection(collisionDetection, it->first, isCollision);
 		}
 
-		std::map<std::string, bool>::iterator itCollision;
+		//std::map<std::string, bool>::iterator itCollision;
 		for (itCollision = collisionDetection.begin(); 
 			itCollision != collisionDetection.end(); itCollision++) {
 			std::map<std::string, std::tuple<AbstractModel::SBB, 

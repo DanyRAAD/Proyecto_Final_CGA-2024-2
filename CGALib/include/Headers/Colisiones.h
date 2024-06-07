@@ -210,5 +210,54 @@ bool testOBBOBB(AbstractModel::OBB a, AbstractModel::OBB b){
 	return true;
 }
 
+bool testSLABPlane(float p, float v, float min, float max, float &tmin, float &tmax){
+	if(fabs(v) <= 0.01){
+		return p >= min && p <= max;
+	}
+	float odd = 1 / v;
+	float t1 = (min - p) * odd;
+	float t2 = (max - p) * odd;
+	if(t1 > t2){
+		float aux = t1;
+		t1 = t2;
+		t2 = aux;
+	}
+	if(t1 > tmin){
+		tmin = t1;
+	}
+	if(t2 < tmax){
+		tmax = t2;
+	}
+	if(tmin > tmax)
+		return false;
+	return true;
+}
+
+bool intersectSegmentAABB(glm::vec3 o, glm::vec3 t, AbstractModel::AABB collider){
+	float tmin = -FLT_MAX;
+	float tmax = FLT_MAX;
+	glm::vec3 d = glm::normalize(t - o);
+	if(!testSLABPlane(o.x, d.x, collider.mins.x, collider.maxs.x, tmin, tmax))
+		return false;
+	if(!testSLABPlane(o.y, d.y, collider.mins.y, collider.maxs.y, tmin, tmax))
+		return false;
+	if(!testSLABPlane(o.z, d.z, collider.mins.z, collider.maxs.z, tmin, tmax))
+		return false;
+	if(tmin >= 0 && tmin < glm::length(t - o))
+		return true;
+	return false;
+}
+
+bool testRayOBB(glm::vec3 o, glm::vec3 t, AbstractModel::OBB collider){
+	glm::quat qinv = glm::inverse(collider.u); // 1.- Quaternion inverso
+	glm::vec3 oInv = qinv * o; // 2.- Transformar el origen, destino y centro de la caja con el inverso.
+	glm::vec3 tInv = qinv * t;
+	glm::vec3 cOBBINv = qinv * collider.c;
+	AbstractModel::AABB colliderAABB; 
+	colliderAABB.maxs = cOBBINv + collider.e; //3.-  Crear un collider AABB
+	colliderAABB.mins = cOBBINv - collider.e;
+	return intersectSegmentAABB(oInv, tInv, colliderAABB);//4.- Utilizar el método de colisión de un rayo con una caja alineada
+}
+
 
 #endif /* COLISIONES_H_ */
