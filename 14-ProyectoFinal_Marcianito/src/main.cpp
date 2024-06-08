@@ -1,5 +1,7 @@
 #define _USE_MATH_DEFINES
 #include <cmath>
+#include <set>
+
 //glew include
 #include <GL/glew.h>
 
@@ -88,7 +90,10 @@ Model modelLampPost2;
 
 Model modelMeteor;
 FontTypeRendering::FontTypeRendering *modelText;
-
+// Declarar los nombres de los meteoros y pilas
+std::set<std::string> meteorNames = {"Meteor1", "Meteor2", "Meteor3", "Meteor4", "Meteor5", 
+                                     "Meteor6", "Meteor7", "Meteor8", "Meteor9", "Meteor10"};
+std::set<std::string> batteryNames = {"pila0", "pila1", "pila2"};
 // Modelos animados
 // Mayow
 Model mayowModelAnimate;
@@ -139,7 +144,7 @@ int animationMayowIndex = 1;
 int modelSelected = 0;
 bool enableCountSelected = true;
 int stateAlien;
-
+int lives = 3;
 // Variables to animations keyframes
 bool saveFrame = false, availableSave = true;
 std::ofstream myfile;
@@ -193,6 +198,10 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 void init(int width, int height, std::string strTitle, bool bFullScreen);
 void destroy();
 void display_msg(std::chrono::time_point<std::chrono::high_resolution_clock> start);
+void handleCollision(const std::string& collider1, const std::string& collider2, 
+                     std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>& collidersOBB, 
+                     std::map<std::string, std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>& collidersSBB);
+
 bool processInput(bool continueApplication = true);
 
 // Implementacion de todas las funciones.
@@ -735,18 +744,18 @@ bool processInput(bool continueApplication) {
 
 	// Controles de mayow
 	if (modelSelected == 0 && glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS){
-		modelMatrixMayow = glm::rotate(modelMatrixMayow, 0.02f, glm::vec3(0, 1, 0));
+		modelMatrixMayow = glm::rotate(modelMatrixMayow, 0.1f, glm::vec3(0, 1, 0));
 		animationMayowIndex = 0;
 	} else if (modelSelected == 0 && glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS){
-		modelMatrixMayow = glm::rotate(modelMatrixMayow, -0.02f, glm::vec3(0, 1, 0));
+		modelMatrixMayow = glm::rotate(modelMatrixMayow, -0.1f, glm::vec3(0, 1, 0));
 		animationMayowIndex = 0;
 	}
 	if (modelSelected == 0 && glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
-		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, 0.08));
+		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, 0.1));
 		animationMayowIndex = 0;
 	}
 	else if (modelSelected == 0 && glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
-		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, -0.08));
+		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, -0.1));
 		animationMayowIndex = 0;
 	}
 
@@ -1066,7 +1075,7 @@ void applicationLoop() {
 			modelMatrixColliderLamp = glm::translate(modelMatrixColliderLamp, modelLamp1.getObb().c);
 			lampCollider.c = glm::vec3(modelMatrixColliderLamp[3]);
 			lampCollider.e = modelLamp1.getObb().e * glm::vec3(0.5, 0.5, 0.5);
-			std::get<0>(collidersOBB.find("lamp1-" + std::to_string(i))->second) = lampCollider;
+			std::get<0>(collidersOBB.find("pila" + std::to_string(i))->second) = lampCollider;
 		}
 
 		// Lamps2 colliders
@@ -1086,14 +1095,30 @@ void applicationLoop() {
 			std::get<0>(collidersOBB.find("lamp2-" + std::to_string(i))->second) = lampCollider;
 		}
 
+				// Collider de Alien
+			AbstractModel::OBB mayowCollider;
+			glm::mat4 modelmatrixColliderMayow = glm::mat4(modelMatrixMayow);
+			modelmatrixColliderMayow = glm::rotate(modelmatrixColliderMayow,
+					glm::radians(-90.0f), glm::vec3(1, 0, 0));
+			// Set the orientation of collider before doing the scale
+			mayowCollider.u = glm::quat_cast(modelmatrixColliderMayow);
+			modelmatrixColliderMayow = glm::scale(modelmatrixColliderMayow, glm::vec3(0.8f, 1.0f, 0.8f));
+			modelmatrixColliderMayow = glm::translate(modelmatrixColliderMayow,
+					glm::vec3(mayowModelAnimate.getObb().c.x,
+							mayowModelAnimate.getObb().c.y - 0.85f,
+							mayowModelAnimate.getObb().c.z  ));
+			mayowCollider.e = mayowModelAnimate.getObb().e * glm::vec3(0.5f, 0.7f, 1.0f);
+			mayowCollider.c = glm::vec3(modelmatrixColliderMayow[3]);
+			addOrUpdateColliders(collidersOBB, "mayow", mayowCollider, modelMatrixMayow);
+
 		//Collider del meteoro1
 		AbstractModel::SBB meteor1Collider;
 		glm::mat4 modelMatrixColliderMeteor1 = glm::mat4(modelMeteor1);
 		modelMatrixColliderMeteor1 = glm::scale(modelMatrixColliderMeteor1, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor1 = glm::translate(modelMatrixColliderMeteor1, modelMeteor.getSbb().c);
 		meteor1Collider.c = glm::vec3(modelMatrixColliderMeteor1[3]);
-		meteor1Collider.ratio = modelMeteor.getSbb().ratio * 1.0;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor1Collider, modelMeteor1);
+		meteor1Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor1", meteor1Collider, modelMeteor1);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor2Collider;
@@ -1101,8 +1126,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor2 = glm::scale(modelMatrixColliderMeteor2, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor2 = glm::translate(modelMatrixColliderMeteor2, modelMeteor.getSbb().c);
 		meteor2Collider.c = glm::vec3(modelMatrixColliderMeteor2[3]);
-		meteor2Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor2Collider, modelMeteor2);
+		meteor2Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor2", meteor2Collider, modelMeteor2);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor3Collider;
@@ -1110,8 +1135,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor3 = glm::scale(modelMatrixColliderMeteor3, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor3 = glm::translate(modelMatrixColliderMeteor3, modelMeteor.getSbb().c);
 		meteor3Collider.c = glm::vec3(modelMatrixColliderMeteor3[3]);
-		meteor3Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor3Collider, modelMeteor3);
+		meteor3Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor3", meteor3Collider, modelMeteor3);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor4Collider;
@@ -1119,8 +1144,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor4 = glm::scale(modelMatrixColliderMeteor4, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor4 = glm::translate(modelMatrixColliderMeteor4, modelMeteor.getSbb().c);
 		meteor4Collider.c = glm::vec3(modelMatrixColliderMeteor4[3]);
-		meteor4Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor4Collider, modelMeteor4);
+		meteor4Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor4", meteor4Collider, modelMeteor4);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor5Collider;
@@ -1128,8 +1153,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor5 = glm::scale(modelMatrixColliderMeteor5, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor5 = glm::translate(modelMatrixColliderMeteor5, modelMeteor.getSbb().c);
 		meteor5Collider.c = glm::vec3(modelMatrixColliderMeteor5[3]);
-		meteor5Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor5Collider, modelMeteor5);
+		meteor5Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor5", meteor5Collider, modelMeteor5);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor6Collider;
@@ -1137,8 +1162,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor6 = glm::scale(modelMatrixColliderMeteor6, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor6 = glm::translate(modelMatrixColliderMeteor6, modelMeteor.getSbb().c);
 		meteor6Collider.c = glm::vec3(modelMatrixColliderMeteor6[3]);
-		meteor6Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor6Collider, modelMeteor6);
+		meteor6Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor6", meteor6Collider, modelMeteor6);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor7Collider;
@@ -1146,8 +1171,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor7 = glm::scale(modelMatrixColliderMeteor7, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor7 = glm::translate(modelMatrixColliderMeteor7, modelMeteor.getSbb().c);
 		meteor7Collider.c = glm::vec3(modelMatrixColliderMeteor7[3]);
-		meteor7Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor7Collider, modelMeteor7);
+		meteor7Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor7", meteor7Collider, modelMeteor7);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor8Collider;
@@ -1155,8 +1180,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor8 = glm::scale(modelMatrixColliderMeteor8, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor8 = glm::translate(modelMatrixColliderMeteor8, modelMeteor.getSbb().c);
 		meteor8Collider.c = glm::vec3(modelMatrixColliderMeteor8[3]);
-		meteor8Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor8Collider, modelMeteor8);
+		meteor8Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor8", meteor8Collider, modelMeteor8);
 
 		//Collider del meteoro1
 		AbstractModel::SBB meteor9Collider;
@@ -1164,8 +1189,8 @@ void applicationLoop() {
 		modelMatrixColliderMeteor9 = glm::scale(modelMatrixColliderMeteor9, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor9 = glm::translate(modelMatrixColliderMeteor9, modelMeteor.getSbb().c);
 		meteor9Collider.c = glm::vec3(modelMatrixColliderMeteor9[3]);
-		meteor9Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor9Collider, modelMeteor9);
+		meteor9Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor9", meteor9Collider, modelMeteor9);
 
 		//Collider del meteoro10
 		AbstractModel::SBB meteor10Collider;
@@ -1173,114 +1198,83 @@ void applicationLoop() {
 		modelMatrixColliderMeteor10 = glm::scale(modelMatrixColliderMeteor10, glm::vec3(1.0, 1.0, 1.0));
 		modelMatrixColliderMeteor10 = glm::translate(modelMatrixColliderMeteor10, modelMeteor.getSbb().c);
 		meteor10Collider.c = glm::vec3(modelMatrixColliderMeteor10[3]);
-		meteor10Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
-		addOrUpdateColliders(collidersSBB, "Meteor", meteor10Collider, modelMeteor10);
-		// Collider de mayow
-		AbstractModel::OBB mayowCollider;
-		glm::mat4 modelMatrixColliderMayow = glm::mat4(1.0);  // Iniciar con una matriz identidad
-
-		// Aplicar las transformaciones en el orden correcto
-		modelMatrixColliderMayow = glm::translate(modelMatrixColliderMayow, glm::vec3(modelMatrixMayow[3]));  // Trasladar al centro del modelo
-		modelMatrixColliderMayow = glm::rotate(modelMatrixColliderMayow, glm::radians(-90.0f), glm::vec3(1, 0, 0));  // Aplicar la rotación necesaria
-		modelMatrixColliderMayow = glm::scale(modelMatrixColliderMayow, glm::vec3(0.9f));  // Ajustar la escala global
-
-		// Obtener el centro y las dimensiones del OBB del modelo
-		glm::vec3 obbCenter = mayowModelAnimate.getObb().c;
-		glm::vec3 obbExtents = mayowModelAnimate.getObb().e;
-
-		// Ajustar la traslación adicional para centrar el OBB
-		modelMatrixColliderMayow = glm::translate(modelMatrixColliderMayow, obbCenter);
-
-		// Establecer la orientación del colisionador
-		mayowCollider.u = glm::quat_cast(modelMatrixColliderMayow);
-		modelMatrixColliderMayow = glm::scale(modelMatrixColliderMayow, glm::vec3(1.0f, 1.5f, 1.0f));
-
-		// Ajustar las dimensiones del colisionador
-		mayowCollider.e = obbExtents* glm::vec3(0.5, 0.7, 1.0);;  // Ajustar con la escala global y factor adicional para brazos abiertos
+		meteor10Collider.ratio = modelMeteor.getSbb().ratio * 0.7;
+		addOrUpdateColliders(collidersSBB, "Meteor10", meteor10Collider, modelMeteor10);
 		
-		//mayowCollider.e = obbExtents * 0.9f * 0.7f;  // Ajustar con la escala global y factor adicional para brazos abiertos
-		//mayowCollider.c = glm::vec3(modelMatrixColliderMayow * glm::vec4(0, 0, 0, 1));  // Centro del colisionador
-		mayowCollider.c = glm::vec3 (modelMatrixColliderMayow[3]);
-		// Aplicar un desplazamiento manual para ajustar la posición del colisionador
-		glm::vec3 manualOffset = glm::vec3(-0.5f, -0.1f, 0.4f);  // Ajusta estos valores según sea necesario
-		mayowCollider.c += manualOffset;
-
-		// Agregar o actualizar el colisionador en el mapa
-		addOrUpdateColliders(collidersOBB, "mayow", mayowCollider, modelMatrixMayow);
-
 		
-		std::map<std::string, std::tuple<AbstractModel::OBB,glm::mat4,glm::mat4>>::iterator itObb1;
-		std::map<std::string, std::tuple<AbstractModel::OBB,glm::mat4,glm::mat4>>::iterator itObb2;
-		std::map<std::string, std::tuple<AbstractModel::SBB,glm::mat4,glm::mat4>>::iterator itSBB1;
-		std::map<std::string, std::tuple<AbstractModel::SBB,glm::mat4,glm::mat4>>::iterator itSBB2;
+		/*******************************************
+		 * Test Colisions
+		 *******************************************/
+		std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator itObb1;
+		std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator itObb2;
+		std::map<std::string, std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>::iterator itSBB1;
+		std::map<std::string, std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>::iterator itSBB2;
 
-		for(itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++){
+		for (itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++) {
 			bool isColision = false;
-			for(itObb2 = collidersOBB.begin(); itObb2 != collidersOBB.end() && !isColision; itObb2++){
-				if(itObb1 != itObb2 
-					&& testOBBOBB(std::get<0>(itObb1->second), std::get<0>(itObb2->second))){
-					std::cout << "Hay colision entre " << itObb1->first << " y el modelo" << 
-						itObb2->first << std::endl;
+			for (itObb2 = collidersOBB.begin(); itObb2 != collidersOBB.end() && !isColision; itObb2++) {
+				if (itObb1 != itObb2 && testOBBOBB(std::get<0>(itObb1->second), std::get<0>(itObb2->second))) {
+					std::cout << "Hay colision entre " << itObb1->first << " y el modelo " << itObb2->first << std::endl;
 					isColision = true;
+					handleCollision(itObb1->first, itObb2->first, collidersOBB, collidersSBB);// Llamada a la función de manejo de colisiones
 				}
 			}
 			addOrUpdateCollisionDetection(collisionDetector, itObb1->first, isColision);
 		}
 
-		for(itSBB1 = collidersSBB.begin(); itSBB1 != collidersSBB.end(); itSBB1++){
+		for (itSBB1 = collidersSBB.begin(); itSBB1 != collidersSBB.end(); itSBB1++) {
 			bool isColision = false;
-			for(itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++){
-				if(testSphereOBox(std::get<0>(itSBB1->second), std::get<0>(itObb1->second))){
-					std::cout << "Hay colision entre " << itSBB1->first << " y el objeto " << 
-						itObb1->first << std::endl;
+			for (itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++) {
+				if (testSphereOBox(std::get<0>(itSBB1->second), std::get<0>(itObb1->second))) {
+					std::cout << "Hay colision entre " << itSBB1->first << " y el objeto " << itObb1->first << std::endl;
 					isColision = true;
-					addOrUpdateCollisionDetection(collisionDetector, itObb1->first, true);	
+					handleCollision(itObb1->first, itObb2->first, collidersOBB, collidersSBB);  // Llamada a la función de manejo de colisiones
+					addOrUpdateCollisionDetection(collisionDetector, itObb1->first, true);
 				}
 			}
 			addOrUpdateCollisionDetection(collisionDetector, itSBB1->first, isColision);
 		}
 
-		for(itSBB1 = collidersSBB.begin(); itSBB1 != collidersSBB.end(); itSBB1++){
+		for (itSBB1 = collidersSBB.begin(); itSBB1 != collidersSBB.end(); itSBB1++) {
 			bool isColision = false;
-			for(itSBB2 = collidersSBB.begin(); itSBB2 != collidersSBB.end() && !isColision; itSBB2++){
-				if(itSBB1 != itSBB2 && testSphereSphereIntersection(
-					std::get<0>(itSBB1->second), std::get<0>(itSBB2->second)
-				)){
-					std::cout << "Hay colision entre " << itSBB1->first << " y el objeto " << 
-						itSBB2->first << std::endl;
+			for (itSBB2 = collidersSBB.begin(); itSBB2 != collidersSBB.end() && !isColision; itSBB2++) {
+				if (itSBB1 != itSBB2 && testSphereSphereIntersection(std::get<0>(itSBB1->second), std::get<0>(itSBB2->second))) {
+					std::cout << "Hay colision entre " << itSBB1->first << " y el objeto " << itSBB2->first << std::endl;
 					isColision = true;
+					handleCollision(itObb1->first, itObb2->first, collidersOBB, collidersSBB);  // Llamada a la función de manejo de colisiones
 				}
 			}
 			addOrUpdateCollisionDetection(collisionDetector, itSBB1->first, isColision);
 		}
 
 		std::map<std::string, bool>::iterator itCollision;
-		for(itCollision = collisionDetector.begin(); itCollision != collisionDetector.end();
-			itCollision++){
-			std::map<std::string, std::tuple<AbstractModel::OBB, 
-				glm::mat4, glm::mat4>>::iterator itOBBuscado = collidersOBB.find(
-					itCollision->first);
-			std::map<std::string, std::tuple<AbstractModel::SBB, 
-				glm::mat4, glm::mat4>>::iterator itSBBBuscado = collidersSBB.find(
-					itCollision->first);
-			if(itOBBuscado != collidersOBB.end()){
-				if(!itCollision->second)
+		for (itCollision = collisionDetector.begin(); itCollision != collisionDetector.end(); itCollision++) {
+			std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator itOBBuscado = collidersOBB.find(itCollision->first);
+			std::map<std::string, std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>::iterator itSBBBuscado = collidersSBB.find(itCollision->first);
+			if (itOBBuscado != collidersOBB.end()) {
+				if (!itCollision->second) {
 					addOrUpdateColliders(collidersOBB, itCollision->first);
-				else{
-					if(itCollision->first.compare("mayow") == 0)
+				} else {
+					if (itCollision->first.compare("mayow") == 0) {
 						modelMatrixMayow = std::get<1>(itOBBuscado->second);
-					if(itCollision->first.compare("nave") == 0)
+					}
+					if (itCollision->first.compare("nave") == 0) {
 						modelMatrixNave = std::get<1>(itOBBuscado->second);
+					}
 				}
 			}
-			if(itSBBBuscado != collidersSBB.end()){
-				if(!itCollision->second)
+			if (itSBBBuscado != collidersSBB.end()) {
+				if (!itCollision->second) {
 					addOrUpdateColliders(collidersSBB, itCollision->first);
+				}
 			}
 		}
-		/*******************************************
-		 * Render de colliders
-		 *******************************************/
+
+		/**
+		 * Render coliders
+		 * 
+		 * 
+		 * 
 		for (std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4> >::iterator it =
 				collidersOBB.begin(); it != collidersOBB.end(); it++) {
 			glm::mat4 matrixCollider = glm::mat4(1.0);
@@ -1301,82 +1295,8 @@ void applicationLoop() {
 			sphereCollider.enableWireMode();
 			sphereCollider.render(matrixCollider);
 		}
-
-		/*********************Prueba de colisiones****************************/
-		for (std::map<std::string,
-			std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>::iterator it =
-			collidersSBB.begin(); it != collidersSBB.end(); it++) {
-			bool isCollision = false;
-			for (std::map<std::string,
-				std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>::iterator jt =
-				collidersSBB.begin(); jt != collidersSBB.end(); jt++) {
-				if (it != jt && testSphereSphereIntersection(
-					std::get<0>(it->second), std::get<0>(jt->second))) {
-					std::cout << "Hay collision entre " << it->first <<
-						" y el modelo " << jt->first << std::endl;
-					isCollision = true;
-				}
-			}
-			addOrUpdateCollisionDetection(collisionDetection, it->first, isCollision);
-		}
-
-		for (std::map<std::string,
-			std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator it =
-			collidersOBB.begin(); it != collidersOBB.end(); it++) {
-			bool isColision = false;
-			for (std::map<std::string,
-				std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator jt =
-				collidersOBB.begin(); jt != collidersOBB.end(); jt++) {
-				if (it != jt && 
-					testOBBOBB(std::get<0>(it->second), std::get<0>(jt->second))) {
-					std::cout << "Hay colision entre " << it->first << " y el modelo" <<
-						jt->first << std::endl;
-					isColision = true;
-				}
-			}
-			addOrUpdateCollisionDetection(collisionDetection, it->first, isColision);
-		}
-
-		for (std::map<std::string,
-			std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>::iterator it =
-			collidersSBB.begin(); it != collidersSBB.end(); it++) {
-			bool isCollision = false;
-			for (std::map<std::string,
-				std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>::iterator jt =
-				collidersOBB.begin(); jt != collidersOBB.end(); jt++) {
-				if (testSphereOBox(std::get<0>(it->second), std::get<0>(jt->second))) {
-					std::cout << "Hay colision del " << it->first << " y el modelo" <<
-						jt->first << std::endl;
-					isCollision = true;
-					addOrUpdateCollisionDetection(collisionDetection, jt->first, true);
-				}
-			}
-			addOrUpdateCollisionDetection(collisionDetection, it->first, isCollision);
-		}
-
-		//std::map<std::string, bool>::iterator itCollision;
-		for (itCollision = collisionDetection.begin(); 
-			itCollision != collisionDetection.end(); itCollision++) {
-			std::map<std::string, std::tuple<AbstractModel::SBB, 
-				glm::mat4, glm::mat4>>::iterator sbbBuscado = 
-				collidersSBB.find(itCollision->first);
-			std::map<std::string, std::tuple<AbstractModel::OBB,
-				glm::mat4, glm::mat4>>::iterator obbBuscado =
-				collidersOBB.find(itCollision->first);
-			if (sbbBuscado != collidersSBB.end()) {
-				if (!itCollision->second) 
-					addOrUpdateColliders(collidersSBB, itCollision->first);
-			}
-			if (obbBuscado != collidersOBB.end()) {
-				if (!itCollision->second) 
-					addOrUpdateColliders(collidersOBB, itCollision->first);
-				else {
-					if (itCollision->first.compare("mayow") == 0)
-						modelMatrixMayow = std::get<1>(obbBuscado->second);
-				}
-			}
-		}
-
+		
+		 */
 		// Esto es para ilustrar la transformacion inversa de los coliders
 		/*glm::vec3 cinv = glm::inverse(mayowCollider.u) * glm::vec4(rockCollider.c, 1.0);
 		glm::mat4 invColliderS = glm::mat4(1.0);
@@ -1414,10 +1334,41 @@ void display_msg(std::chrono::time_point<std::chrono::high_resolution_clock> sta
     
     std::stringstream ss;
     ss << "Tiempo restante: " << remainingTime / 60 << ":" << (remainingTime % 60 < 10 ? "0" : "") << remainingTime % 60;
-
-    // Renderizar el tiempo restante
     modelText->render(ss.str(), -0.3, -0.9, 50, 1.0, 1.0, 0.0);
+
+    std::stringstream lives_ss;
+    lives_ss << "Vidas restantes: " << lives;
+    modelText->render(lives_ss.str(), -0.3, -0.8, 50, 1.0, 1.0, 0.0); // Ajusta la posición y el tamaño según sea necesario
 }
+
+
+
+void handleCollision(const std::string& collider1, const std::string& collider2, 
+                     std::map<std::string, std::tuple<AbstractModel::OBB, glm::mat4, glm::mat4>>& collidersOBB, 
+                     std::map<std::string, std::tuple<AbstractModel::SBB, glm::mat4, glm::mat4>>& collidersSBB) {
+    if (collider1 == "mayow" || collider2 == "mayow") {
+        std::string otherCollider = (collider1 == "mayow") ? collider2 : collider1;
+
+        if (meteorNames.find(otherCollider) != meteorNames.end()) {
+            std::cout << "Alien colisiono con un meteoro. Pierde vida." << std::endl;
+            lives--;
+            stateAlien = 1;
+        } else if (batteryNames.find(otherCollider) != batteryNames.end()) {
+            std::cout << "Alien colisiono con una pila. Gana vida." << std::endl;
+            lives++;
+            stateAlien = 2;
+            collidersSBB.erase(otherCollider);
+        } else if (otherCollider == "goal") {
+            std::cout << "Alien colisiono con el objetivo." << std::endl;
+            stateAlien = 3;
+        } else {
+            std::cout << "Alien colisiono con un objeto desconocido: " << otherCollider << std::endl;
+        }
+    } else {
+        std::cout << "Colisión entre " << collider1 << " y " << collider2 << " no involucra a Alien." << std::endl;
+    }
+}
+
 
 int main(int argc, char **argv) {
 	init(800, 700, "Window GLFW", false);
