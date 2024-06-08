@@ -42,6 +42,12 @@
 // Include Colision headers functions
 #include "Headers/Colisiones.h"
 
+#include <iostream>
+#include <chrono>
+
+// Font rendering include
+#include "Headers/FontTypeRendering.h"
+
 #define ARRAY_SIZE_IN_ELEMENTS(a) (sizeof(a)/sizeof(a[0]))
 
 int screenWidth;
@@ -56,6 +62,8 @@ Shader shaderSkybox;
 Shader shaderMulLighting;
 //Shader para el terreno
 Shader shaderTerrain;
+// Shader para dibujar un objeto con solo textura
+Shader shaderTexture;
 
 std::shared_ptr<Camera> camera(new ThirdPersonCamera());
 float distanceFromTarget = 7.0;
@@ -67,6 +75,7 @@ Box boxHighway;
 Box boxLandingPad;
 Sphere esfera1(10, 10);
 Box boxCollider;
+Box boxIntro;
 Sphere sphereCollider(10, 10);
 // Models complex instances
 //Nave
@@ -77,6 +86,8 @@ Model modelLamp1;
 Model modelLamp2;
 Model modelLampPost2;
 
+Model modelMeteor;
+FontTypeRendering::FontTypeRendering *modelText;
 
 // Modelos animados
 // Mayow
@@ -85,7 +96,7 @@ Model mayowModelAnimate;
 Terrain terrain(-1, -1, 200, 8, "../Textures/heightmap.png");
 
 GLuint textureCespedID, textureWallID, textureWindowID, textureHighwayID, textureLandingPadID;
-GLuint textureTerrainRID, textureTerrainGID, textureTerrainBID, textureTerrainBlendMapID;
+GLuint textureTerrainRID, textureTerrainGID, textureTerrainBID, textureTerrainBlendMapID, textureActivaID;
 GLuint skyboxTextureID;
 
 GLenum types[6] = {
@@ -112,11 +123,22 @@ int lastMousePosY, offsetY = 0;
 glm::mat4 modelMatrixMayow = glm::mat4(1.0f);
 glm::mat4 modelMatrixNave = glm::mat4(1.0f);
 
+glm::mat4 modelMeteor1 = glm::mat4(1.0f);
+glm::mat4 modelMeteor2 = glm::mat4(1.0f);
+glm::mat4 modelMeteor3 = glm::mat4(1.0f);
+glm::mat4 modelMeteor4 = glm::mat4(1.0f);
+glm::mat4 modelMeteor5 = glm::mat4(1.0f);
+glm::mat4 modelMeteor6 = glm::mat4(1.0f);
+glm::mat4 modelMeteor7 = glm::mat4(1.0f);
+glm::mat4 modelMeteor8 = glm::mat4(1.0f);
+glm::mat4 modelMeteor9 = glm::mat4(1.0f);
+glm::mat4 modelMeteor10 = glm::mat4(1.0f);
 
 
 int animationMayowIndex = 1;
 int modelSelected = 0;
 bool enableCountSelected = true;
+int stateAlien;
 
 // Variables to animations keyframes
 bool saveFrame = false, availableSave = true;
@@ -170,6 +192,7 @@ void mouseButtonCallback(GLFWwindow *window, int button, int state, int mod);
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 void init(int width, int height, std::string strTitle, bool bFullScreen);
 void destroy();
+void display_msg(std::chrono::time_point<std::chrono::high_resolution_clock> start);
 bool processInput(bool continueApplication = true);
 
 // Implementacion de todas las funciones.
@@ -231,7 +254,10 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	shaderSkybox.initialize("../Shaders/skyBox.vs", "../Shaders/skyBox.fs");
 	shaderMulLighting.initialize("../Shaders/iluminacion_textura_animation.vs", "../Shaders/multipleLights.fs");
 	shaderTerrain.initialize("../Shaders/terrain.vs", "../Shaders/terrain.fs");
-
+	shaderTexture.initialize("../Shaders/texturizado.vs", "../Shaders/texturizado.fs");
+	
+	modelText = new FontTypeRendering::FontTypeRendering(screenWidth, screenHeight);
+	modelText->Initialize();
 	// Inicializacion de los objetos.
 	skyboxSphere.init();
 	skyboxSphere.setShader(&shaderSkybox);
@@ -264,6 +290,9 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	modelNave.loadModel("../models/Nave/nave.obj");
 	modelNave.setShader(&shaderMulLighting);
 
+	boxIntro.init();
+	boxIntro.setShader(&shaderTexture);
+	boxIntro.setScale(glm::vec3(2.0, 2.0, 1.0));
 
 	//Lamps models
 	modelLamp1.loadModel("../models/Pila/pila.obj");
@@ -277,6 +306,9 @@ void init(int width, int height, std::string strTitle, bool bFullScreen) {
 	mayowModelAnimate.loadModel("../models/alien/Alien.fbx");
 	mayowModelAnimate.setShader(&shaderMulLighting);
 
+	//Meteor
+	modelMeteor.loadModel("../models/Meteor/meteor.obj");
+	modelMeteor.setShader(&shaderMulLighting);
 
 	// Terreno
 	terrain.init();
@@ -544,6 +576,7 @@ void destroy() {
 	esfera1.destroy();
 	boxCollider.destroy();
 	sphereCollider.destroy();
+	boxIntro.destroy();
 
 	// Custom objects Delete
 	modelLamp1.destroy();
@@ -551,7 +584,7 @@ void destroy() {
 	modelLampPost2.destroy();
 	mayowModelAnimate.destroy();
 	modelNave.destroy();
-
+	modelMeteor.destroy();
 
 	// Terrains objects Delete
 	terrain.destroy();
@@ -709,11 +742,11 @@ bool processInput(bool continueApplication) {
 		animationMayowIndex = 0;
 	}
 	if (modelSelected == 0 && glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
-		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, 0.02));
+		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, 0.08));
 		animationMayowIndex = 0;
 	}
 	else if (modelSelected == 0 && glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
-		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, -0.02));
+		modelMatrixMayow = glm::translate(modelMatrixMayow, glm::vec3(0.0, 0.0, -0.08));
 		animationMayowIndex = 0;
 	}
 
@@ -740,10 +773,33 @@ void applicationLoop() {
 	modelMatrixMayow = glm::rotate(modelMatrixMayow, glm::radians(-90.0f), glm::vec3(0, 1, 0));
 	modelMatrixNave = glm::translate(modelMatrixNave, glm::vec3(10.0, 2.0, -20.5));
 
+	modelMeteor1 = glm::translate(modelMeteor1, glm::vec3(-68.0f, 2.5f, 70.0f));
+	modelMeteor1 = glm::scale(modelMeteor1, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor2 = glm::translate(modelMeteor2, glm::vec3(-58.0f, 2.5f, 60.0f));
+	modelMeteor2 = glm::scale(modelMeteor2, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor3 = glm::translate(modelMeteor3, glm::vec3(-48.0f, 2.5f, 50.0f));
+	modelMeteor3 = glm::scale(modelMeteor3, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor4 = glm::translate(modelMeteor4, glm::vec3(-38.0f, 2.5f, 40.0f));
+	modelMeteor4 = glm::scale(modelMeteor4, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor5 = glm::translate(modelMeteor5, glm::vec3(-28.0f, 2.5f, 30.0f));
+	modelMeteor5 = glm::scale(modelMeteor5, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor6 = glm::translate(modelMeteor6, glm::vec3(-18.0f, 2.5f, 20.0f));
+	modelMeteor6 = glm::scale(modelMeteor6, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor7 = glm::translate(modelMeteor7, glm::vec3(-8.0f, 2.5f, 30.0f));
+	modelMeteor7 = glm::scale(modelMeteor7, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor8 = glm::translate(modelMeteor8, glm::vec3(0.0f, 2.5f, 20.0f));
+	modelMeteor8 = glm::scale(modelMeteor8, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor9 = glm::translate(modelMeteor9, glm::vec3(8.0f, 2.5f, -10.0f));
+	modelMeteor9 = glm::scale(modelMeteor9, glm::vec3(1.0f, 1.0f, 1.0f));
+	modelMeteor10 = glm::translate(modelMeteor10, glm::vec3(16.0f, 2.5f, -20.0f));
+	modelMeteor10 = glm::scale(modelMeteor10, glm::vec3(1.0f, 1.0f, 1.0f));
+
 
 	// Variables to interpolation key frames
 	lastTime = TimeManager::Instance().GetTime();
-
+	
+	auto start = std::chrono::high_resolution_clock::now();
+    bool running = true;
 	while (psi) {
 		currTime = TimeManager::Instance().GetTime();
 		if(currTime - lastTime < 0.016666667){
@@ -925,7 +981,6 @@ void applicationLoop() {
 
 		// Se regresa el cull faces IMPORTANTE para la capa
 		glEnable(GL_CULL_FACE);
-
 		/*****************************************
 		 * Objetos animados por huesos
 		 * **************************************/
@@ -943,11 +998,24 @@ void applicationLoop() {
 			modelMatrixMayow[3][1] = terrain.getHeightTerrain(modelMatrixMayow[3][0], modelMatrixMayow[3][2]);
 		}
 		glm::mat4 modelMatrixMayowBody = glm::mat4(modelMatrixMayow);
-		modelMatrixMayowBody = glm::scale(modelMatrixMayowBody, glm::vec3(0.015f));
+		modelMatrixMayowBody = glm::scale(modelMatrixMayowBody, glm::vec3(0.01f));
 		mayowModelAnimate.setAnimationIndex(animationMayowIndex);
 		mayowModelAnimate.render(modelMatrixMayowBody);	
 		animationMayowIndex = 1;
 
+		/*********************************************
+		 *  Meteor renders
+		 ********************************************/
+		modelMeteor.render(modelMeteor1);
+		modelMeteor.render(modelMeteor2);
+		modelMeteor.render(modelMeteor3);
+		modelMeteor.render(modelMeteor4);
+		modelMeteor.render(modelMeteor5);
+		modelMeteor.render(modelMeteor6);
+		modelMeteor.render(modelMeteor7);
+		modelMeteor.render(modelMeteor8);
+		modelMeteor.render(modelMeteor9);
+		modelMeteor.render(modelMeteor10);		
 		/*******************************************
 		 * Skybox
 		 *******************************************/
@@ -991,7 +1059,7 @@ void applicationLoop() {
 			modelMatrixColliderLamp = glm::translate(modelMatrixColliderLamp, lamp1Position[i]);
 			modelMatrixColliderLamp = glm::rotate(modelMatrixColliderLamp, glm::radians(lamp1Orientation[i]),
 					glm::vec3(0, 1, 0));
-			addOrUpdateColliders(collidersOBB, "lamp1-" + std::to_string(i), lampCollider, modelMatrixColliderLamp);
+			addOrUpdateColliders(collidersOBB, "pila" + std::to_string(i), lampCollider, modelMatrixColliderLamp);
 			// Set the orientation of collider before doing the scale
 			lampCollider.u = glm::quat_cast(modelMatrixColliderLamp);
 			modelMatrixColliderLamp = glm::scale(modelMatrixColliderLamp, glm::vec3(0.5, 0.5, 0.5));
@@ -1018,6 +1086,95 @@ void applicationLoop() {
 			std::get<0>(collidersOBB.find("lamp2-" + std::to_string(i))->second) = lampCollider;
 		}
 
+		//Collider del meteoro1
+		AbstractModel::SBB meteor1Collider;
+		glm::mat4 modelMatrixColliderMeteor1 = glm::mat4(modelMeteor1);
+		modelMatrixColliderMeteor1 = glm::scale(modelMatrixColliderMeteor1, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor1 = glm::translate(modelMatrixColliderMeteor1, modelMeteor.getSbb().c);
+		meteor1Collider.c = glm::vec3(modelMatrixColliderMeteor1[3]);
+		meteor1Collider.ratio = modelMeteor.getSbb().ratio * 1.0;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor1Collider, modelMeteor1);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor2Collider;
+		glm::mat4 modelMatrixColliderMeteor2 = glm::mat4(modelMeteor2);
+		modelMatrixColliderMeteor2 = glm::scale(modelMatrixColliderMeteor2, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor2 = glm::translate(modelMatrixColliderMeteor2, modelMeteor.getSbb().c);
+		meteor2Collider.c = glm::vec3(modelMatrixColliderMeteor2[3]);
+		meteor2Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor2Collider, modelMeteor2);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor3Collider;
+		glm::mat4 modelMatrixColliderMeteor3 = glm::mat4(modelMeteor3);
+		modelMatrixColliderMeteor3 = glm::scale(modelMatrixColliderMeteor3, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor3 = glm::translate(modelMatrixColliderMeteor3, modelMeteor.getSbb().c);
+		meteor3Collider.c = glm::vec3(modelMatrixColliderMeteor3[3]);
+		meteor3Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor3Collider, modelMeteor3);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor4Collider;
+		glm::mat4 modelMatrixColliderMeteor4 = glm::mat4(modelMeteor4);
+		modelMatrixColliderMeteor4 = glm::scale(modelMatrixColliderMeteor4, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor4 = glm::translate(modelMatrixColliderMeteor4, modelMeteor.getSbb().c);
+		meteor4Collider.c = glm::vec3(modelMatrixColliderMeteor4[3]);
+		meteor4Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor4Collider, modelMeteor4);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor5Collider;
+		glm::mat4 modelMatrixColliderMeteor5 = glm::mat4(modelMeteor5);
+		modelMatrixColliderMeteor5 = glm::scale(modelMatrixColliderMeteor5, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor5 = glm::translate(modelMatrixColliderMeteor5, modelMeteor.getSbb().c);
+		meteor5Collider.c = glm::vec3(modelMatrixColliderMeteor5[3]);
+		meteor5Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor5Collider, modelMeteor5);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor6Collider;
+		glm::mat4 modelMatrixColliderMeteor6 = glm::mat4(modelMeteor6);
+		modelMatrixColliderMeteor6 = glm::scale(modelMatrixColliderMeteor6, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor6 = glm::translate(modelMatrixColliderMeteor6, modelMeteor.getSbb().c);
+		meteor6Collider.c = glm::vec3(modelMatrixColliderMeteor6[3]);
+		meteor6Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor6Collider, modelMeteor6);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor7Collider;
+		glm::mat4 modelMatrixColliderMeteor7 = glm::mat4(modelMeteor7);
+		modelMatrixColliderMeteor7 = glm::scale(modelMatrixColliderMeteor7, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor7 = glm::translate(modelMatrixColliderMeteor7, modelMeteor.getSbb().c);
+		meteor7Collider.c = glm::vec3(modelMatrixColliderMeteor7[3]);
+		meteor7Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor7Collider, modelMeteor7);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor8Collider;
+		glm::mat4 modelMatrixColliderMeteor8 = glm::mat4(modelMeteor8);
+		modelMatrixColliderMeteor8 = glm::scale(modelMatrixColliderMeteor8, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor8 = glm::translate(modelMatrixColliderMeteor8, modelMeteor.getSbb().c);
+		meteor8Collider.c = glm::vec3(modelMatrixColliderMeteor8[3]);
+		meteor8Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor8Collider, modelMeteor8);
+
+		//Collider del meteoro1
+		AbstractModel::SBB meteor9Collider;
+		glm::mat4 modelMatrixColliderMeteor9 = glm::mat4(modelMeteor9);
+		modelMatrixColliderMeteor9 = glm::scale(modelMatrixColliderMeteor9, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor9 = glm::translate(modelMatrixColliderMeteor9, modelMeteor.getSbb().c);
+		meteor9Collider.c = glm::vec3(modelMatrixColliderMeteor9[3]);
+		meteor9Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor9Collider, modelMeteor9);
+
+		//Collider del meteoro10
+		AbstractModel::SBB meteor10Collider;
+		glm::mat4 modelMatrixColliderMeteor10 = glm::mat4(modelMeteor10);
+		modelMatrixColliderMeteor10 = glm::scale(modelMatrixColliderMeteor10, glm::vec3(1.0, 1.0, 1.0));
+		modelMatrixColliderMeteor10 = glm::translate(modelMatrixColliderMeteor10, modelMeteor.getSbb().c);
+		meteor10Collider.c = glm::vec3(modelMatrixColliderMeteor10[3]);
+		meteor10Collider.ratio = modelMeteor.getSbb().ratio * 0.5;
+		addOrUpdateColliders(collidersSBB, "Meteor", meteor10Collider, modelMeteor10);
 		// Collider de mayow
 		AbstractModel::OBB mayowCollider;
 		glm::mat4 modelMatrixColliderMayow = glm::mat4(1.0);  // Iniciar con una matriz identidad
@@ -1036,11 +1193,14 @@ void applicationLoop() {
 
 		// Establecer la orientación del colisionador
 		mayowCollider.u = glm::quat_cast(modelMatrixColliderMayow);
+		modelMatrixColliderMayow = glm::scale(modelMatrixColliderMayow, glm::vec3(1.0f, 1.5f, 1.0f));
 
 		// Ajustar las dimensiones del colisionador
-		mayowCollider.e = obbExtents * 0.9f * 0.7f;  // Ajustar con la escala global y factor adicional para brazos abiertos
-		mayowCollider.c = glm::vec3(modelMatrixColliderMayow * glm::vec4(0, 0, 0, 1));  // Centro del colisionador
-
+		mayowCollider.e = obbExtents* glm::vec3(0.5, 0.7, 1.0);;  // Ajustar con la escala global y factor adicional para brazos abiertos
+		
+		//mayowCollider.e = obbExtents * 0.9f * 0.7f;  // Ajustar con la escala global y factor adicional para brazos abiertos
+		//mayowCollider.c = glm::vec3(modelMatrixColliderMayow * glm::vec4(0, 0, 0, 1));  // Centro del colisionador
+		mayowCollider.c = glm::vec3 (modelMatrixColliderMayow[3]);
 		// Aplicar un desplazamiento manual para ajustar la posición del colisionador
 		glm::vec3 manualOffset = glm::vec3(-0.5f, -0.1f, 0.4f);  // Ajusta estos valores según sea necesario
 		mayowCollider.c += manualOffset;
@@ -1048,10 +1208,12 @@ void applicationLoop() {
 		// Agregar o actualizar el colisionador en el mapa
 		addOrUpdateColliders(collidersOBB, "mayow", mayowCollider, modelMatrixMayow);
 
+		
 		std::map<std::string, std::tuple<AbstractModel::OBB,glm::mat4,glm::mat4>>::iterator itObb1;
 		std::map<std::string, std::tuple<AbstractModel::OBB,glm::mat4,glm::mat4>>::iterator itObb2;
 		std::map<std::string, std::tuple<AbstractModel::SBB,glm::mat4,glm::mat4>>::iterator itSBB1;
 		std::map<std::string, std::tuple<AbstractModel::SBB,glm::mat4,glm::mat4>>::iterator itSBB2;
+
 		for(itObb1 = collidersOBB.begin(); itObb1 != collidersOBB.end(); itObb1++){
 			bool isColision = false;
 			for(itObb2 = collidersOBB.begin(); itObb2 != collidersOBB.end() && !isColision; itObb2++){
@@ -1237,10 +1399,24 @@ void applicationLoop() {
 		
 		/**********Maquinas de estado*************/
 
-		// Constantes de animaciones
+	   // Mostrar el mensaje de tiempo restante
+        display_msg(start);
 
 		glfwSwapBuffers(window);
 	}
+}
+
+
+void display_msg(std::chrono::time_point<std::chrono::high_resolution_clock> start) {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - start);
+    int remainingTime = 120 - elapsed.count(); // 120 segundos = 2 minutos
+    
+    std::stringstream ss;
+    ss << "Tiempo restante: " << remainingTime / 60 << ":" << (remainingTime % 60 < 10 ? "0" : "") << remainingTime % 60;
+
+    // Renderizar el tiempo restante
+    modelText->render(ss.str(), -0.3, -0.9, 50, 1.0, 1.0, 0.0);
 }
 
 int main(int argc, char **argv) {

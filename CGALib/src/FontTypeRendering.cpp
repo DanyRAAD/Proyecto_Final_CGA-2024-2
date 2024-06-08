@@ -38,8 +38,8 @@ const char *FontTypeRendering::FRAGMENT_SHADER = ""
  * @param ScreenHeight Largo de ventana.
  */
 FontTypeRendering::FontTypeRendering(double ScreenWidth, double ScreenHeight) {
-	FontTypeRendering::SCALEX = 2.0 / ScreenWidth;
-	FontTypeRendering::SCALEY = 2.0 / ScreenHeight;
+	FontTypeRendering::SCALEX = 4.0 / ScreenWidth;
+	FontTypeRendering::SCALEY = 4.0 / ScreenHeight;
 }
 
 /**
@@ -114,7 +114,7 @@ void FontTypeRendering::Initialize() {
  * @param x Coordenada en X.
  * @param y Coordenada en Y.
  */
-void FontTypeRendering::render(const std::string &str, float x, float y) {
+void FontTypeRendering::render(const std::string &str, float x, float y, int size, float r, float g, float b) {
 	// Se activa la unidad de textura.
 	glActiveTexture (GL_TEXTURE0);
 	// Se enalza hacia el tipo de textura.
@@ -125,17 +125,15 @@ void FontTypeRendering::render(const std::string &str, float x, float y) {
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
 	glUseProgram (program);
 	// Se envia el color de la fuente.
-	glUniform4f(colorUniform, 0.5, 1.0, 1.0, 1.0);
+	glUniform4f(colorUniform, r, g, b, 1.0);
 	// Se envia la textura a utilizar.
 	glUniform1i(texUniform, 0);
 	// Se coloca el tama�o en Pixeles de la fuente.
 	FT_Set_Pixel_Sizes(face, 0, 12);
 	// Renderiza la fuente.
-	glEnable(GL_BLEND);
 	render_text(str, face, x, y, SCALEX, SCALEY);
 	// Se desabilita el sample de textura.
 	glBindSampler(0, 0);
-	glDisable(GL_BLEND);
 }
 
 /**

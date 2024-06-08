@@ -79,7 +79,7 @@ public:
 	 * @param x Coordenada en X.
 	 * @param y Coordenada en Y.
 	 */
-	void render(const std::string &str, float x, float y);
+	void render(const std::string &str, float x, float y, int size, float r, float g, float b);
 	/**
 	 * Destructor de clase.
 	 */
